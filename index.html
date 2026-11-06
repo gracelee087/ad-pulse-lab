@@ -42,6 +42,11 @@
   #res-table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 16px; }
   #res-table th, #res-table td { border-bottom: 1px solid rgba(255,255,255,.25); padding: 6px 8px; text-align: left; vertical-align: top; }
   #res-table th { color: var(--muted); font-weight: 600; }
+  .cmp { width: 100%; border-collapse: collapse; margin: 6px 0 12px; font-size: 15px; }
+  .cmp th, .cmp td { border-bottom: 1px solid rgba(255,255,255,.25); padding: 4px 8px; text-align: left; }
+  .badge { font-size: 12px; padding: 1px 6px; border-radius: 4px; }
+  .badge.sim { background: #ffd27a; color: #222; } .badge.real { background: #8fe3a1; color: #222; }
+  .simbanner { background: #ffd27a; color: #222; padding: 8px 12px; border-radius: 6px; max-width: none; }
   .chart { margin: 10px 0 16px; } .chart h2 { margin: 0 0 2px; font-size: 16px; }
   #markbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 11; display: none; padding: 10px 16px; background: rgba(0,0,0,.8); color: #fff; font-size: 15px; text-align: center; }
   #markbar.show { display: block; }
@@ -64,6 +69,7 @@
   <div>
     <button id="btn-test-ads">Test ad playback (no camera)</button>
     <button id="btn-mark">Mark scenes (no camera)</button>
+    <button id="btn-compare">Compare result files</button>
     <button id="btn-start" disabled>Start</button>
   </div>
 </section>
@@ -153,6 +159,15 @@
       <button id="btn-res-delete">Delete</button>
       <button id="btn-res-save">Approve and save</button>
     </div>
+  </div>
+</section>
+
+<section id="s-compare" class="screen">
+  <div class="doc">
+    <h1>Compare result files</h1>
+    <p>Pick one or more result files (.json). Nothing is uploaded; the files are only read on this PC.</p>
+    <div><input type="file" id="cmp-files" accept=".json,application/json" multiple> <button id="btn-cmp-back">Back</button></div>
+    <div id="cmp-out"></div>
   </div>
 </section>
 

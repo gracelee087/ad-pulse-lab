@@ -76,4 +76,54 @@ function adChartSvg(opts) {
         + out.join('') + '</svg>';
 }
 
-module.exports = { adChartSvg };
+// Compare view: pulse change vs rest (BPM), one line per result file, on one ad's time axis.
+// opts: { lines: [{ values: [bpm|null], startOffsetS, rest, simulated }], durationS, scenes, cautions }
+function overlayChartSvg(opts) {
+    const W = 760, H = 200, L = 44, R = 44, T = 40, B = 22;
+    const { lines = [], durationS, padS = 10, scenes = [], cautions = [] } = opts;
+    const t0 = -padS, t1 = durationS + padS;
+    const X = (t) => L + ((t - t0) / (t1 - t0)) * (W - L - R);
+    const plotH = H - T - B;
+    const deltas = lines.map((ln) => ln.values.map((v, i) => ({ t: ln.startOffsetS + i, d: v == null || ln.rest == null ? null : v - ln.rest })));
+    const all = deltas.flat().filter((p) => p.d != null && p.t >= t0 && p.t <= t1).map((p) => p.d);
+    const m = Math.max(5, Math.ceil(Math.max(0, ...all.map(Math.abs))));
+    const Y = (d) => T + plotH / 2 - (d / m) * (plotH / 2);
+    const out = [];
+    out.push(`<rect x="${X(0).toFixed(1)}" y="${T}" width="${(X(durationS) - X(0)).toFixed(1)}" height="${plotH}" fill="rgba(255,255,255,.08)"/>`);
+    for (const c of cautions) {
+        out.push(`<rect x="${X(c.from).toFixed(1)}" y="${T}" width="${(X(c.to) - X(c.from)).toFixed(1)}" height="${plotH}" fill="rgba(0,0,0,.22)"><title>${esc(c.reason || 'measurement caution')}</title></rect>`);
+    }
+    for (let s = 0; s <= durationS; s += 10) {
+        out.push(`<text x="${X(s).toFixed(1)}" y="${H - 4}" class="ax" text-anchor="middle">${s}s</text>`);
+    }
+    scenes.forEach((sc, i) => {
+        const x = X(sc.t).toFixed(1);
+        out.push(`<line x1="${x}" x2="${x}" y1="${T - 4}" y2="${H - B}" stroke="#e3c9ff" stroke-width="1.5"/>`);
+        out.push(`<text x="${(+x + 3).toFixed(1)}" y="${10 + (i % 3) * 11}" class="sc">${esc(LABELS[sc.label] || sc.label)}</text>`);
+    });
+    out.push(`<line x1="${L}" x2="${W - R}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}" stroke="#d0d0d0" stroke-dasharray="3 3"/>`);
+    out.push(`<text x="${W - R + 4}" y="${(Y(0) + 4).toFixed(1)}" class="ax">rest</text>`);
+    out.push(`<text x="${W - R + 4}" y="${T + 8}" class="pl">+${m}</text><text x="${W - R + 4}" y="${H - B}" class="pl">−${m}</text>`);
+    // simulated first (underneath), real on top
+    const order = lines.map((ln, i) => i).sort((a, b) => Number(!!lines[b].simulated) - Number(!!lines[a].simulated));
+    for (const i of order) {
+        const sim = !!lines[i].simulated;
+        let seg = [];
+        const segs = [];
+        for (const p of deltas[i]) {
+            if (p.d == null || p.t < t0 || p.t > t1) { if (seg.length > 1) segs.push(seg); seg = []; continue; }
+            seg.push(`${X(p.t).toFixed(1)},${Y(p.d).toFixed(1)}`);
+        }
+        if (seg.length > 1) segs.push(seg);
+        for (const sg of segs) {
+            out.push(sim
+                ? `<polyline points="${sg.join(' ')}" fill="none" stroke="rgba(220,220,220,.45)" stroke-width="1" stroke-dasharray="4 3"/>`
+                : `<polyline points="${sg.join(' ')}" fill="none" stroke="#ffb3ad" stroke-width="2.2"/>`);
+        }
+    }
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Pulse change versus rest during the ad, one line per result file" xmlns="http://www.w3.org/2000/svg">`
+        + '<style>.ax{font:10px system-ui,sans-serif;fill:#d0d0d0}.sc{font:10px system-ui,sans-serif;fill:#e3c9ff}.pl{font:10px system-ui,sans-serif;fill:#ffb3ad}</style>'
+        + out.join('') + '</svg>';
+}
+
+module.exports = { adChartSvg, overlayChartSvg };

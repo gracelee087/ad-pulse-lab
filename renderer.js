@@ -7,6 +7,7 @@ const {
 } = require('@smartspectra/node-sdk/renderer');
 const { decodeMetrics } = require('@smartspectra/node-sdk/messages');
 const { adChartSvg } = require('./chart');
+const { renderCompare } = require('./compare');
 
 // ---- session settings -------------------------------------------------------
 // Three ad styles from the effectiveness research (see HANDOFF 4-5):
@@ -52,7 +53,7 @@ function log(kind, data) { window.adpulse.log({ t: Date.now(), phase, kind, ...d
 function show(screenId) {
     document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('active', s.id === screenId));
     $('player-wrap').classList.toggle('active', screenId === 'player');
-    $('status').classList.toggle('hidden', ['player', 's-intro', 's-consent', 's-results', 's-done'].includes(screenId));
+    $('status').classList.toggle('hidden', ['player', 's-intro', 's-consent', 's-results', 's-done', 's-compare'].includes(screenId));
 }
 function setPhase(p) { phase = p; $('st-phase').textContent = p; log('phase', { name: p }); store.phases.push({ name: p, t: Date.now() }); }
 
@@ -563,5 +564,11 @@ async function runSession() {
     $('btn-test-ads').onclick = () => testAds().catch((e) => { $('key-state').textContent = e.message; show('s-intro'); });
     $('btn-mark').onclick = () => markScenes().catch((e) => { $('key-state').textContent = e.message; show('s-intro'); });
     $('btn-start').onclick = () => runSession();
+    $('btn-compare').onclick = () => { $('cmp-out').innerHTML = ''; $('cmp-files').value = ''; show('s-compare'); };
+    $('btn-cmp-back').onclick = () => show('s-intro');
+    $('cmp-files').onchange = async (ev) => {
+        const files = await Promise.all([...ev.target.files].map(async (f) => ({ name: f.name, text: await f.text() })));
+        $('cmp-out').innerHTML = renderCompare(files).html;
+    };
     window.addEventListener('beforeunload', () => { window.adpulse.sdkStop(); });
 })();
