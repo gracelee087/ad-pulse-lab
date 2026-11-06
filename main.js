@@ -89,6 +89,10 @@ async function stopSdk() {
 }
 
 app.whenReady().then(async () => {
+    // A session closed without Approve/Delete leaves its raw log behind; remove it at the next start.
+    if (process.env.ADPULSE_KEEP_LOGS !== '1') {
+        try { for (const f of fs.readdirSync(LOG_DIR)) if (/^session-.*\.jsonl$/.test(f)) fs.unlinkSync(path.join(LOG_DIR, f)); } catch { /* no logs folder */ }
+    }
     const origin = await startServer();
     const fromApp = (url) => typeof url === 'string' && url.startsWith(origin + '/');
     const ok = (e) => fromApp(e.senderFrame && e.senderFrame.url);

@@ -2,6 +2,7 @@
   "name": "ad-pulse-lab",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "Consented ad-reaction test: breathing and pulse from the webcam (Presage SmartSpectra) while watching ads.",
   "main": "main.js",
   "scripts": {
