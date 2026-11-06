@@ -1,0 +1,18 @@
+{
+  "name": "ad-pulse-lab",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Consented ad-reaction test: breathing and pulse from the webcam (Presage SmartSpectra) while watching ads.",
+  "main": "main.js",
+  "scripts": {
+    "build": "esbuild renderer.js --bundle --outfile=dist/renderer.bundle.js --platform=browser --format=iife --log-level=warning",
+    "start": "npm run build && electron ."
+  },
+  "dependencies": {
+    "@smartspectra/node-sdk": "3.4.0"
+  },
+  "devDependencies": {
+    "electron": "43.2.0",
+    "esbuild": "^0.25.0"
+  }
+}

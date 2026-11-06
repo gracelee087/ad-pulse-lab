@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ad Pulse Lab</title>
+<style>
+  :root { --gray: #6b6b6b; --ink: #f2f2f2; --muted: #d0d0d0; --ok: #8fe3a1; --warn: #ffd27a; --err: #ff9a8f; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--gray); color: var(--ink); font: 18px/1.5 system-ui, sans-serif; }
+  .screen { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 32px; text-align: center; }
+  .screen.active { display: flex; }
+  h1 { font-size: 32px; margin: 0 0 12px; }
+  p { max-width: 720px; margin: 6px 0; color: var(--muted); }
+  ul { text-align: left; max-width: 720px; color: var(--muted); }
+  button { font: inherit; padding: 12px 24px; margin: 8px; border: 0; border-radius: 8px; background: #2f2f2f; color: var(--ink); cursor: pointer; }
+  button:disabled { opacity: .4; cursor: default; }
+  button.picked { background: #f2f2f2; color: #222; }
+  .big { font-size: 64px; font-variant-numeric: tabular-nums; margin: 12px 0; }
+  .hint { font-size: 20px; }
+  .hint.ok { color: var(--ok); } .hint.warn { color: var(--warn); } .hint.err { color: var(--err); }
+  #player-wrap { position: absolute; inset: 0; display: none; background: #000; }
+  #player-wrap.active { display: block; }
+  #player { width: 100%; height: 100%; }
+  #status { position: fixed; left: 0; right: 0; bottom: 0; padding: 6px 12px; font-size: 13px; color: var(--muted); background: rgba(0,0,0,.25); display: flex; gap: 18px; justify-content: center; }
+  #status.hidden { display: none; }
+  #error { color: var(--err); }
+  .q { margin: 14px 0; }
+  #frame { position: relative; width: 480px; max-width: 80vw; aspect-ratio: 16 / 9; margin: 12px 0; background: #444; border-radius: 8px; overflow: hidden; }
+  #preview { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); filter: blur(10px); }
+  .zone { position: absolute; left: 30%; width: 40%; border: 2px dashed rgba(255,255,255,.8); color: #fff; font-size: 13px; text-align: left; padding: 2px 6px; }
+  .zone.face { top: 6%; height: 40%; }
+  .zone.chest { top: 50%; height: 46%; left: 20%; width: 60%; }
+  #alert { position: fixed; top: 0; left: 0; right: 0; z-index: 10; display: none; padding: 10px 16px; background: #b3261e; color: #fff; font-size: 18px; text-align: center; }
+  #alert.show { display: block; }
+  #markbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 11; display: none; padding: 10px 16px; background: rgba(0,0,0,.8); color: #fff; font-size: 15px; text-align: center; }
+  #markbar.show { display: block; }
+  #mark-list { color: #ffd27a; min-height: 1.5em; }
+  #player-wrap.marking { bottom: 110px; }
+</style>
+</head>
+<body>
+
+<section id="s-intro" class="screen active">
+  <h1>Ad Pulse Lab — self test</h1>
+  <p>You will watch 3 short coffee ads (about 60 s each) while the camera measures breathing and pulse on this PC.</p>
+  <p>No video and no face data are saved. Only breathing and pulse numbers, your answers, and quality warnings are written to a local log file.</p>
+  <ul>
+    <li>Turn on the room light in front of you. Avoid a window or lamp behind you.</li>
+    <li>Put the camera on the desk so your face and upper chest are visible.</li>
+    <li>Do not talk, chew gum, or move much while measuring. The whole session takes about 8 minutes.</li>
+  </ul>
+  <p id="key-state"></p>
+  <div>
+    <button id="btn-test-ads">Test ad playback (no camera)</button>
+    <button id="btn-mark">Mark scenes (no camera)</button>
+    <button id="btn-start" disabled>I agree — start measuring</button>
+  </div>
+</section>
+
+<section id="s-position" class="screen">
+  <h1>Get into position</h1>
+  <p>Your face should be in the top box and your chest in the bottom box. The preview is blurred and is not saved.</p>
+  <div id="frame">
+    <video id="preview" muted playsinline></video>
+    <div class="zone face">face</div>
+    <div class="zone chest">chest</div>
+  </div>
+  <p>When your face and chest fit the boxes, press Continue.</p>
+  <button id="btn-pos-continue" disabled>Continue</button>
+</section>
+
+<section id="s-check" class="screen">
+  <h1>Camera check</h1>
+  <p>Stay in the same position and look at the screen. This continues by itself when the check is OK.</p>
+  <div id="check-hint" class="hint warn"></div>
+</section>
+
+<section id="s-timer" class="screen">
+  <h1 id="timer-title"></h1>
+  <p id="timer-text"></p>
+  <div id="timer-count" class="big"></div>
+</section>
+
+<section id="s-choice" class="screen">
+  <h1>About this ad</h1>
+  <div class="q">
+    <p>Would you buy this product?</p>
+    <button data-q="purchase" data-v="buy">Buy</button>
+    <button data-q="purchase" data-v="not_buy">Not buy</button>
+  </div>
+  <div class="q">
+    <p>Did you like this ad?</p>
+    <button data-q="liking" data-v="like">Like</button>
+    <button data-q="liking" data-v="dislike">Dislike</button>
+  </div>
+  <button id="btn-choice-next" disabled>Next</button>
+</section>
+
+<section id="s-done" class="screen">
+  <h1>Done — thank you</h1>
+  <p id="done-text"></p>
+</section>
+
+<div id="alert" role="alert"></div>
+
+<div id="markbar">
+  <div><b id="mark-title"></b> · <span id="mark-time">0.0 s</span></div>
+  <div>While the ad is playing, press <b>B</b> when the brand first appears · <b>P</b> when the product is shown · <b>E</b> at the emotional peak</div>
+  <div><b>Space</b> pause/play · <b>Backspace</b> undo · <b>R</b> restart this ad (clears its marks) · <b>N</b> save and go to the next ad</div>
+  <div id="mark-list"></div>
+</div>
+
+<div id="player-wrap"><div id="player"></div></div>
+
+<div id="status" class="hidden">
+  <span id="st-phase"></span><span id="st-valid"></span><span id="st-br"></span><span id="st-pr"></span><span id="st-fps"></span><span id="error"></span>
+</div>
+
+<script src="https://www.youtube.com/iframe_api"></script>
+<script src="dist/renderer.bundle.js"></script>
+</body>
+</html>
