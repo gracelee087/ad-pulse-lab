@@ -40,7 +40,7 @@ SDK events are passed from the main process to the page over IPC, and the page d
 
 Tested on **Windows 11** with Node.js 22. Other platforms have not been tested.
 
-You need a SmartSpectra API key from Presage, a webcam, and an internet connection (for the YouTube ads and the SDK's key check).
+You need a SmartSpectra API key from Presage, a webcam, and an internet connection (for the YouTube ads and the SDK).
 
 ```bash
 git clone https://github.com/gracelee087/ad-pulse-lab.git
@@ -77,7 +77,7 @@ The SDK's native runtime could not load its model files from a folder path with 
 
 - **Camera consent**: measuring starts only after the viewer ticks the required consent boxes. The viewer can stop at any time by closing the window.
 - **Processed on this PC**: the SDK runs on the viewer's PC. Camera video and face data are never saved and never sent by the app. The positioning preview is blurred and not saved.
-- **Network**: the SDK connects to Presage to check the API key. The ads are YouTube embeds, so YouTube receives the usual video player requests.
+- **Network**: the SDK connects to Presage's servers. The ads are YouTube embeds, so YouTube receives the usual video player requests.
 - **SDK telemetry**: turned off (`enableTelemetry: false`).
 - **AI services**: none are used.
 - **What is stored, and where**:
