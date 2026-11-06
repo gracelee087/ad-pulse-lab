@@ -3,25 +3,28 @@
     { "t": 6, "label": "product" },
     { "t": 8, "label": "brand_first" },
     { "t": 17, "label": "product" },
-    { "t": 32, "label": "emotional_low" },
+    { "t": 52, "label": "product" },
     { "t": 54, "label": "emotional_peak" },
     { "t": 57, "label": "tagline" }
   ],
   "dolcegusto_eclipse": [
     { "t": 0, "label": "brand_first" },
     { "t": 5, "label": "product" },
-    { "t": 16, "label": "feature" },
-    { "t": 24, "label": "feature" },
-    { "t": 34, "label": "sensory_peak" },
-    { "t": 52, "label": "product" },
+    { "t": 7, "label": "key_message" },
+    { "t": 16, "label": "key_message" },
+    { "t": 24, "label": "key_message" },
+    { "t": 41, "label": "product" },
+    { "t": 49, "label": "key_message" },
     { "t": 72, "label": "tagline" }
   ],
   "taylors_welcome_to_coffee": [
-    { "t": 14, "label": "visuals_start" },
-    { "t": 27, "label": "flashing_start" },
     { "t": 40, "label": "product" },
-    { "t": 46, "label": "flashing_end" },
     { "t": 54, "label": "brand_first" },
     { "t": 57, "label": "tagline" }
-  ]
+  ],
+  "_caution": {
+    "taylors_welcome_to_coffee": [
+      { "from": 27, "to": 46, "reason": "fast flashing light: pulse may be less reliable" }
+    ]
+  }
 }

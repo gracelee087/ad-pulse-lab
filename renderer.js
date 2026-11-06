@@ -17,7 +17,8 @@ const ADS = [
     { id: 'taylors_welcome_to_coffee', youtube: 'BrQfpdQv2Mo', title: 'Taylors of Harrogate — Welcome to Coffee', style: 'sensory, brand only at the end' },
 ];
 // Dropped: Nespresso 'LaMOIzNrCsQ' turned out to be a behind-the-scenes interview, not the ad (storyboard check).
-const MARK_KEYS = { b: 'brand_first', p: 'product', e: 'emotional_peak' };
+// Scene labels follow common ad-testing practice: brand reveal, product shot, key message, emotional peak, end tagline.
+const MARK_KEYS = { b: 'brand_first', p: 'product', k: 'key_message', e: 'emotional_peak', t: 'tagline' };
 const WARMUP_S = 30;
 const BASELINE_S = 90;
 const RECOVERY_S = 45;
@@ -50,9 +51,9 @@ function log(kind, data) { window.adpulse.log({ t: Date.now(), phase, kind, ...d
 function show(screenId) {
     document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('active', s.id === screenId));
     $('player-wrap').classList.toggle('active', screenId === 'player');
-    $('status').classList.toggle('hidden', screenId === 'player' || screenId === 's-intro');
+    $('status').classList.toggle('hidden', ['player', 's-intro', 's-consent', 's-results', 's-done'].includes(screenId));
 }
-function setPhase(p) { phase = p; $('st-phase').textContent = p; log('phase', { name: p }); }
+function setPhase(p) { phase = p; $('st-phase').textContent = p; log('phase', { name: p }); store.phases.push({ name: p, t: Date.now() }); }
 
 function shuffle(a) {
     const b = a.slice();
@@ -194,6 +195,101 @@ function checkAlerts() {
 }
 setInterval(checkAlerts, 500);
 
+// ---- data kept in memory for the result summary ------------------------------
+const store = { pulse: new Map(), rate: new Map(), trace: new Map(), offsets: [], phases: [], ads: [], choices: {} };
+function resetStore() {
+    store.pulse.clear(); store.rate.clear(); store.trace.clear();
+    store.offsets = []; store.phases = []; store.ads = []; store.choices = {};
+}
+const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+const r1 = (x) => (x == null ? null : Math.round(x * 10) / 10);
+
+// Series as [wallMs, value, stable]; SDK microsecond timestamps mapped to wall clock.
+function series(map) {
+    const off = store.offsets.length ? Math.min(...store.offsets) : 0;
+    return [...map.values()].map((m) => [m.ts / 1000 + off, m.v, m.s]).sort((a, b) => a[0] - b[0]);
+}
+const MIN_USABLE_PCT = 70;   // below this, a window's average is shown but not compared with rest
+function windowStats(ser, from, to, lagMs) {
+    const all = ser.filter(([t]) => t >= from && t < to);
+    const settled = all.filter(([t, , st]) => st && t >= from + lagMs).map(([, v]) => v);
+    const usable = all.length ? Math.round(100 * all.filter(([, , st]) => st).length / all.length) : null;
+    return { mean: r1(mean(settled)), usable, reliable: usable != null && usable >= MIN_USABLE_PCT && settled.length > 0 };
+}
+const delta = (a, b) => (a.reliable && b.reliable ? r1(a.mean - b.mean) : null);
+function perSecond(ser, from, to) {
+    const out = [];
+    for (let t = from; t < to; t += 1000) {
+        const vs = ser.filter(([x, , st]) => x >= t && x < t + 1000 && st).map(([, v]) => v);
+        out.push(vs.length ? Math.round(mean(vs) * 1000) / 1000 : null);
+    }
+    return out;
+}
+
+function buildSummary(order, consent, scenes) {
+    const P = series(store.pulse), R = series(store.rate), T = series(store.trace);
+    const ph = Object.fromEntries(store.phases.map((x, i) => [x.name, { start: x.t, end: (store.phases[i + 1] || { t: Date.now() }).t }]));
+    const b = ph.baseline;
+    const basePulse = windowStats(P, b.start, b.end, 12000);
+    const baseRate = windowStats(R, b.start, b.end, 30000);
+    const ads = store.ads.map((a) => {
+        const p = windowStats(P, a.started, a.ended, 12000);
+        const r = windowStats(R, a.started, a.ended, 30000);
+        const meta = order.find((o) => o.id === a.ad) || {};
+        const ch = store.choices[a.ad] || {};
+        return {
+            ad: a.ad, title: meta.title, style: meta.style, youtube: meta.youtube, position: a.index,
+            duration_s: r1((a.ended - a.started) / 1000),
+            purchase: ch.purchase, liking: ch.liking,
+            pulse_bpm: p.mean, pulse_vs_rest: delta(p, basePulse), pulse_usable_pct: p.usable,
+            breathing_per_min: r.mean, breathing_vs_rest: delta(r, baseRate), breathing_usable_pct: r.usable,
+            _from: a.started - 10000, _to: a.ended + 10000,
+        };
+    });
+    return {
+        format: 'ad-pulse-lab result v1',
+        app_version: '0.1.0',
+        tester_id: testerId,
+        created: new Date().toISOString().slice(0, 10),
+        consent,
+        rest: { pulse_bpm: basePulse.mean, pulse_usable_pct: basePulse.usable, breathing_per_min: baseRate.mean, breathing_usable_pct: baseRate.usable },
+        min_usable_pct_for_comparison: MIN_USABLE_PCT,
+        ads,
+        scenes,
+        notes: 'Pulse = 12 s average (values from 12 s after ad start), breathing rate = 30 s average (from 30 s after ad start); stable values only. No video or face data.',
+        _curves: () => ads.map((a) => ({
+            ad: a.ad, start_offset_s: -10,
+            breathing_wave_1hz: perSecond(T, a._from, a._to),
+            pulse_bpm_1hz: perSecond(P, a._from, a._to),
+        })),
+    };
+}
+
+function fmtDelta(v, unit, usable) {
+    if (v != null) return ` (${v > 0 ? '+' : ''}${v} ${unit} vs rest)`;
+    return usable != null && usable < MIN_USABLE_PCT ? ' (weak signal, not compared)' : ' (not compared: rest signal weak)';
+}
+function showResults(summary) {
+    const rs = summary.rest;
+    const weak = (u) => (u != null && u < MIN_USABLE_PCT ? ' (weak signal - you may have moved)' : '');
+    $('res-base').textContent = `At rest (gray screen): pulse ${rs.pulse_bpm ?? '-'} BPM${weak(rs.pulse_usable_pct)}, breathing ${rs.breathing_per_min ?? '-'} per minute${weak(rs.breathing_usable_pct)}.`;
+    const tb = $('res-table').querySelector('tbody');
+    tb.innerHTML = '';
+    for (const a of summary.ads) {
+        const tr = document.createElement('tr');
+        const cells = [
+            a.title || a.ad,
+            a.pulse_bpm == null ? '-' : `${a.pulse_bpm} BPM${fmtDelta(a.pulse_vs_rest, 'BPM', a.pulse_usable_pct)}`,
+            a.breathing_per_min == null ? '-' : `${a.breathing_per_min} /min${fmtDelta(a.breathing_vs_rest, '/min', a.breathing_usable_pct)}`,
+            `${(a.purchase || '?').replace('_', ' ')} / ${a.liking || '?'}`,
+            `pulse ${a.pulse_usable_pct ?? '-'}% / breathing ${a.breathing_usable_pct ?? '-'}%`,
+        ];
+        for (const c of cells) { const td = document.createElement('td'); td.textContent = c; tr.appendChild(td); }
+        tb.appendChild(tr);
+    }
+    show('s-results');
+}
+
 // ---- SDK (runs in the main process; see main.js) ------------------------------
 let sdkRunning = false;
 let lastValidation = null;
@@ -222,6 +318,11 @@ function onMetrics(buf, ts) {
         pr: pick(d.cardio && d.cardio.pulseRate, true),
     };
     log('metrics', row);
+    const now = Date.now();
+    if (row.ts != null) store.offsets.push(now - row.ts / 1000);
+    for (const m of row.pr || []) store.pulse.set(m.ts, m);
+    for (const m of row.br || []) store.rate.set(m.ts, m);
+    for (const m of row.bt || []) store.trace.set(m.ts, m);
     if (row.pr) watch.lastPulse = Date.now();
     if (row.br && row.br.some((m) => m.s)) watch.lastStableBreath = Date.now();
     if (row.br) $('st-br').textContent = `breathing ${row.br[row.br.length - 1].v.toFixed(0)}/min`;
@@ -325,12 +426,30 @@ async function markScenes() {
     $('key-state').textContent = `Scene marks saved: ${Object.entries(scenes).map(([k, v]) => `${k} ${v.length}`).join(', ')}`;
 }
 
+const testerId = Array.from(crypto.getRandomValues(new Uint8Array(4)), (b) => b.toString(16).padStart(2, '0')).join('');
+
+function askConsent() {
+    const boxes = ['c-measure', 'c-share', 'c-publish'].map($);
+    boxes.forEach((b) => { b.checked = false; });
+    const sync = () => { $('btn-consent-ok').disabled = !($('c-measure').checked && $('c-share').checked); };
+    boxes.forEach((b) => { b.onchange = sync; });
+    sync();
+    show('s-consent');
+    return new Promise((resolve) => {
+        $('btn-consent-cancel').onclick = () => resolve(null);
+        $('btn-consent-ok').onclick = () => resolve({ measure: true, share_after_review: true, publish_aggregate: $('c-publish').checked, at: new Date().toISOString() });
+    });
+}
+
 async function runSession() {
-    const file = await window.adpulse.startLog();
+    const consent = await askConsent();
+    if (!consent) { show('s-intro'); return; }
+    resetStore();
+    await window.adpulse.startLog();
     const order = shuffle(ADS);
     const scenes = await window.adpulse.getScenes();
     phase = 'setup';
-    log('session', { mode: 'measure', file, order: order.map((a) => a.id), ads: ADS, scenes, warmup: WARMUP_S, baseline: BASELINE_S, recovery: RECOVERY_S, ua: navigator.userAgent });
+    log('session', { mode: 'measure', tester: testerId, consent, order: order.map((a) => a.id), ads: ADS, scenes, warmup: WARMUP_S, baseline: BASELINE_S, recovery: RECOVERY_S, ua: navigator.userAgent });
 
     setPhase('position');
     show('s-position');
@@ -364,9 +483,11 @@ async function runSession() {
         setPhase(`ad${i + 1}:${ad.id}`);
         const r = await playAd(ad);
         log('ad_done', { ad: ad.id, index: i + 1, ...r });
+        store.ads.push({ ad: ad.id, index: i + 1, started: r.started || r.ended, ended: r.ended });
         setPhase(`choice${i + 1}:${ad.id}`);
         const c = await askChoice();
         log('choice', { ad: ad.id, index: i + 1, ...c });
+        store.choices[ad.id] = c;
         setPhase(`recovery${i + 1}`);
         await countdown('Rest', 'Gray screen again. Sit still, do not talk.', RECOVERY_S);
     }
@@ -374,7 +495,29 @@ async function runSession() {
     setPhase('end');
     await stopSdk();
     log('session_end', {});
-    $('done-text').textContent = `The log was saved on this PC: ${file}`;
+
+    const summary = buildSummary(order, consent, scenes);
+    showResults(summary);
+    const choice = await new Promise((resolve) => {
+        $('btn-res-save').onclick = () => resolve('save');
+        $('btn-res-delete').onclick = () => resolve('delete');
+    });
+    $('btn-show-file').hidden = true;
+    if (choice === 'save') {
+        const out = { ...summary, ads: summary.ads.map(({ _from, _to, ...a }) => a) };
+        out.curves = $('c-trace').checked ? summary._curves() : null;
+        delete out._curves;
+        const saved = await window.adpulse.saveResult(out);
+        $('done-title').textContent = 'Saved - thank you';
+        $('done-text').textContent = `Your result file: ${saved}. Please send this file to the organizer. Nothing else from this session is kept.`;
+        $('btn-show-file').hidden = false;
+        $('btn-show-file').onclick = () => window.adpulse.showFile(saved);
+    } else {
+        await window.adpulse.deleteSession();
+        $('done-title').textContent = 'Deleted';
+        $('done-text').textContent = 'This session was deleted from this PC. Nothing was saved or sent.';
+    }
+    resetStore();
     show('s-done');
 }
 

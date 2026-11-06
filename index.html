@@ -32,6 +32,16 @@
   .zone.chest { top: 50%; height: 46%; left: 20%; width: 60%; }
   #alert { position: fixed; top: 0; left: 0; right: 0; z-index: 10; display: none; padding: 10px 16px; background: #b3261e; color: #fff; font-size: 18px; text-align: center; }
   #alert.show { display: block; }
+  .doc { max-width: 820px; text-align: left; overflow-y: auto; max-height: 100%; }
+  .doc h1 { text-align: center; } .doc h2 { font-size: 18px; margin: 14px 0 4px; }
+  .doc ul { max-width: none; margin: 4px 0; }
+  .doc > div { text-align: center; margin-top: 12px; }
+  .check { display: flex; gap: 10px; align-items: flex-start; margin: 10px 0; color: var(--ink); cursor: pointer; }
+  .check input { width: 20px; height: 20px; margin-top: 4px; flex: none; }
+  .small { font-size: 14px; }
+  #res-table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 16px; }
+  #res-table th, #res-table td { border-bottom: 1px solid rgba(255,255,255,.25); padding: 6px 8px; text-align: left; vertical-align: top; }
+  #res-table th { color: var(--muted); font-weight: 600; }
   #markbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 11; display: none; padding: 10px 16px; background: rgba(0,0,0,.8); color: #fff; font-size: 15px; text-align: center; }
   #markbar.show { display: block; }
   #mark-list { color: #ffd27a; min-height: 1.5em; }
@@ -41,19 +51,47 @@
 <body>
 
 <section id="s-intro" class="screen active">
-  <h1>Ad Pulse Lab — self test</h1>
-  <p>You will watch 3 short coffee ads (about 60 s each) while the camera measures breathing and pulse on this PC.</p>
-  <p>No video and no face data are saved. Only breathing and pulse numbers, your answers, and quality warnings are written to a local log file.</p>
+  <h1>Ad Pulse Lab</h1>
+  <p>You will watch 3 short coffee ads (60–80 s each) while the camera measures breathing and pulse on this PC.</p>
+  <p>No video and no face data are saved. At the end you review your numbers and decide whether to save a result file.</p>
   <ul>
     <li>Turn on the room light in front of you. Avoid a window or lamp behind you.</li>
     <li>Put the camera on the desk so your face and upper chest are visible.</li>
-    <li>Do not talk, chew gum, or move much while measuring. The whole session takes about 8 minutes.</li>
+    <li>Do not talk, chew gum, or move much while measuring — especially during the gray rest screen, which is the reference for everything else. The whole session takes about 9 minutes.</li>
   </ul>
   <p id="key-state"></p>
   <div>
     <button id="btn-test-ads">Test ad playback (no camera)</button>
     <button id="btn-mark">Mark scenes (no camera)</button>
-    <button id="btn-start" disabled>I agree — start measuring</button>
+    <button id="btn-start" disabled>Start</button>
+  </div>
+</section>
+
+<section id="s-consent" class="screen">
+  <div class="doc">
+    <h1>Before we start</h1>
+    <p>Please read this, then tick the boxes you agree to. You can stop at any time by closing the window.</p>
+    <h2>What happens</h2>
+    <ul>
+      <li>Your webcam is used to measure your <b>breathing</b> and <b>pulse</b> while you watch 3 short coffee ads (about 9 minutes in total).</li>
+      <li>The measurement runs <b>on this PC</b> (Presage SmartSpectra SDK). The camera video and your face are <b>never saved and never sent</b> anywhere.</li>
+      <li>The SDK connects to Presage only to check the access key. SDK usage statistics (telemetry) are <b>turned off</b>. No AI service is used.</li>
+      <li>After each ad you answer two questions yourself: <i>Would you buy it?</i> and <i>Did you like the ad?</i> The app does not guess your feelings.</li>
+      <li>This is not a medical test and the numbers are not health advice.</li>
+    </ul>
+    <h2>Your results</h2>
+    <ul>
+      <li>At the end you see your own numbers first. Only if you press <b>Approve and save</b> is a result file created. <b>Delete</b> removes this session's data from this PC.</li>
+      <li>The file contains: a random ID (no name), your answers, and breathing and pulse numbers. No video, no face data.</li>
+      <li>You send the file yourself to the organizer. You can ask the organizer to delete it at any time; the organizer deletes all files after the contest results (December 2026).</li>
+    </ul>
+    <label class="check"><input type="checkbox" id="c-measure"> <span><b>Required.</b> I agree that my breathing and pulse are measured from the webcam on this PC while I watch the ads.</span></label>
+    <label class="check"><input type="checkbox" id="c-share"> <span><b>Required.</b> I agree to review my results and, if I approve them, send the result file to the organizer myself.</span></label>
+    <label class="check"><input type="checkbox" id="c-publish"> <span><b>Optional.</b> My results may be included, without my name and only combined with other people's results, in a public write-up and demo video.</span></label>
+    <div>
+      <button id="btn-consent-cancel">Cancel</button>
+      <button id="btn-consent-ok" disabled>Start measuring</button>
+    </div>
   </div>
 </section>
 
@@ -96,16 +134,35 @@
   <button id="btn-choice-next" disabled>Next</button>
 </section>
 
+<section id="s-results" class="screen">
+  <div class="doc">
+    <h1>Your results</h1>
+    <p>These are physical measurements from the camera, shown next to your own answers. They are not a judgement of you or of the ads.</p>
+    <p id="res-base"></p>
+    <table id="res-table">
+      <thead><tr><th>Ad</th><th>Pulse</th><th>Breathing rate</th><th>Your answers</th><th>Usable signal</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <p class="small">Pulse is a 12-second average and breathing rate a 30-second average, so short moments are smoothed out. "vs rest" compares with the gray-screen rest at the start.</p>
+    <label class="check"><input type="checkbox" id="c-trace" checked> <span>Include the breathing and pulse curves (one value per second) so the organizer can see changes during each scene.</span></label>
+    <div>
+      <button id="btn-res-delete">Delete</button>
+      <button id="btn-res-save">Approve and save</button>
+    </div>
+  </div>
+</section>
+
 <section id="s-done" class="screen">
-  <h1>Done — thank you</h1>
+  <h1 id="done-title">Done — thank you</h1>
   <p id="done-text"></p>
+  <button id="btn-show-file" hidden>Show the file</button>
 </section>
 
 <div id="alert" role="alert"></div>
 
 <div id="markbar">
   <div><b id="mark-title"></b> · <span id="mark-time">0.0 s</span></div>
-  <div>While the ad is playing, press <b>B</b> when the brand first appears · <b>P</b> when the product is shown · <b>E</b> at the emotional peak</div>
+  <div>While the ad is playing, press <b>B</b> brand first appears · <b>P</b> product shown · <b>K</b> key message · <b>E</b> emotional peak · <b>T</b> end tagline</div>
   <div><b>Space</b> pause/play · <b>Backspace</b> undo · <b>R</b> restart this ad (clears its marks) · <b>N</b> save and go to the next ad</div>
   <div id="mark-list"></div>
 </div>

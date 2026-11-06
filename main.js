@@ -14,7 +14,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const http = require('http');
-const { app, BrowserWindow, session, ipcMain } = require('electron');
+const { app, BrowserWindow, session, ipcMain, shell } = require('electron');
 
 const ROOT = __dirname;
 const LOG_DIR = path.join(ROOT, 'logs');
@@ -123,6 +123,32 @@ app.whenReady().then(async () => {
     ipcMain.handle('adpulse:saveScenes', (e, data) => {
         if (!ok(e) || typeof data !== 'object') return false;
         fs.writeFileSync(SCENES, JSON.stringify(data, null, 2) + '\n');
+        return true;
+    });
+
+    // Result file: written only after the tester approves it. Raw session log is then removed
+    // (set ADPULSE_KEEP_LOGS=1 to keep it, e.g. for the organizer's own test runs).
+    const keepLogs = process.env.ADPULSE_KEEP_LOGS === '1';
+    const deleteLog = () => {
+        if (logFile && !keepLogs) { try { fs.unlinkSync(logFile); } catch { /* already gone */ } }
+        logFile = null;
+    };
+    ipcMain.handle('adpulse:saveResult', (e, result) => {
+        if (!ok(e) || typeof result !== 'object' || !result) return null;
+        const dir = path.join(app.getPath('documents'), 'AdPulseLab');
+        fs.mkdirSync(dir, { recursive: true });
+        const id = String(result.tester_id || 'unknown').replace(/[^A-Za-z0-9]/g, '');
+        const d = new Date();
+        const p2 = (n) => String(n).padStart(2, '0');
+        const stamp = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}`;   // local time
+        const file = path.join(dir, `adpulse-result-${id}-${stamp}.json`);
+        fs.writeFileSync(file, JSON.stringify(result, null, 2) + '\n');
+        deleteLog();
+        return file;
+    });
+    ipcMain.handle('adpulse:deleteSession', (e) => { if (ok(e)) deleteLog(); return true; });
+    ipcMain.handle('adpulse:showFile', (e, file) => {
+        if (ok(e) && typeof file === 'string' && file.startsWith(path.join(app.getPath('documents'), 'AdPulseLab'))) shell.showItemInFolder(file);
         return true;
     });
 
