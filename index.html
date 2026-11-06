@@ -42,6 +42,7 @@
   #res-table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 16px; }
   #res-table th, #res-table td { border-bottom: 1px solid rgba(255,255,255,.25); padding: 6px 8px; text-align: left; vertical-align: top; }
   #res-table th { color: var(--muted); font-weight: 600; }
+  .chart { margin: 10px 0 16px; } .chart h2 { margin: 0 0 2px; font-size: 16px; }
   #markbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 11; display: none; padding: 10px 16px; background: rgba(0,0,0,.8); color: #fff; font-size: 15px; text-align: center; }
   #markbar.show { display: block; }
   #mark-list { color: #ffd27a; min-height: 1.5em; }
@@ -143,6 +144,9 @@
       <thead><tr><th>Ad</th><th>Pulse</th><th>Breathing rate</th><th>Your answers</th><th>Usable signal</th></tr></thead>
       <tbody></tbody>
     </table>
+    <h2>During each ad</h2>
+    <p class="small"><span style="color:#9fd3ff">Blue</span> = breathing wave (shape only; faint where the signal was weak). <span style="color:#ffb3ad">Red</span> = pulse in BPM. <span style="color:#e3c9ff">Purple lines</span> = scenes (brand, product, key message, emotional peak, tagline). Light area = the ad; dark band = measurement caution (e.g. flashing light).</p>
+    <div id="res-charts"></div>
     <p class="small">Pulse is a 12-second average and breathing rate a 30-second average, so short moments are smoothed out. "vs rest" compares with the gray-screen rest at the start.</p>
     <label class="check"><input type="checkbox" id="c-trace" checked> <span>Include the breathing and pulse curves (one value per second) so the organizer can see changes during each scene.</span></label>
     <div>

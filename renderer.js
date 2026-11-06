@@ -6,6 +6,7 @@ const {
     ProcessingStatus, ValidationCode, breathingMetrics, cardioMetrics,
 } = require('@smartspectra/node-sdk/renderer');
 const { decodeMetrics } = require('@smartspectra/node-sdk/messages');
+const { adChartSvg } = require('./chart');
 
 // ---- session settings -------------------------------------------------------
 // Three ad styles from the effectiveness research (see HANDOFF 4-5):
@@ -226,6 +227,17 @@ function perSecond(ser, from, to) {
     return out;
 }
 
+// Chart points, t in seconds from ad start. Breathing keeps unstable values (drawn faint); pulse is stable only.
+function chartPoints(ser, from, to, adStart, stepMs, stableOnly) {
+    const out = [];
+    for (let t = from; t < to; t += stepMs) {
+        const win = ser.filter(([x]) => x >= t && x < t + stepMs);
+        const use = stableOnly ? win.filter(([, , st]) => st) : win;
+        out.push({ t: (t - adStart) / 1000, v: use.length ? mean(use.map(([, v]) => v)) : null, s: win.length > 0 && win.filter(([, , st]) => st).length * 2 >= win.length });
+    }
+    return out;
+}
+
 function buildSummary(order, consent, scenes) {
     const P = series(store.pulse), R = series(store.rate), T = series(store.trace);
     const ph = Object.fromEntries(store.phases.map((x, i) => [x.name, { start: x.t, end: (store.phases[i + 1] || { t: Date.now() }).t }]));
@@ -244,6 +256,13 @@ function buildSummary(order, consent, scenes) {
             pulse_bpm: p.mean, pulse_vs_rest: delta(p, basePulse), pulse_usable_pct: p.usable,
             breathing_per_min: r.mean, breathing_vs_rest: delta(r, baseRate), breathing_usable_pct: r.usable,
             _from: a.started - 10000, _to: a.ended + 10000,
+            _chart: {
+                breath: chartPoints(T, a.started - 10000, a.ended + 10000, a.started, 250, false),
+                pulse: chartPoints(P, a.started - 10000, a.ended + 10000, a.started, 1000, true),
+                durationS: (a.ended - a.started) / 1000,
+                scenes: (scenes && scenes[a.ad]) || [],
+                cautions: ((scenes && scenes._caution) || {})[a.ad] || [],
+            },
         };
     });
     return {
@@ -286,6 +305,17 @@ function showResults(summary) {
         ];
         for (const c of cells) { const td = document.createElement('td'); td.textContent = c; tr.appendChild(td); }
         tb.appendChild(tr);
+    }
+    const charts = $('res-charts');
+    charts.innerHTML = '';
+    for (const a of summary.ads) {
+        const box = document.createElement('div');
+        box.className = 'chart';
+        const h = document.createElement('h2');
+        h.textContent = `${a.position}. ${a.title || a.ad}`;
+        box.appendChild(h);
+        box.insertAdjacentHTML('beforeend', adChartSvg(a._chart));
+        charts.appendChild(box);
     }
     show('s-results');
 }
@@ -504,7 +534,7 @@ async function runSession() {
     });
     $('btn-show-file').hidden = true;
     if (choice === 'save') {
-        const out = { ...summary, ads: summary.ads.map(({ _from, _to, ...a }) => a) };
+        const out = { ...summary, ads: summary.ads.map(({ _from, _to, _chart, ...a }) => a) };
         out.curves = $('c-trace').checked ? summary._curves() : null;
         delete out._curves;
         const saved = await window.adpulse.saveResult(out);
